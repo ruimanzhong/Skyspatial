@@ -1,0 +1,16 @@
+---
+title: "User Report"
+output: html_document
+params:
+  text: ""
+  year: ""
+  results: ""
+---
+## User Comments:
+```{r, echo=FALSE}
+params$text
+```
+## Results:
+```{r, echo=FALSE}
+params$results
+```

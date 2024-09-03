@@ -1,0 +1,10 @@
+name: saudi-arabia-shiny
+title:
+username: hananalahmadi
+account: hananalahmadi
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12364698
+bundleId:
+url: https://hananalahmadi.shinyapps.io/saudi-arabia-shiny/
+version: 1
