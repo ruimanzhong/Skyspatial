@@ -4,7 +4,6 @@ library(sf)
 library(ggplot2)
 library(rgeoboundaries)
 library(rnaturalearth)
-library(dplyr)
 library(SpatialEpi)
 library(spdep)
 library(INLA)
@@ -18,6 +17,11 @@ library(leaflet)
 library(shiny)
 library(rmarkdown)
 library(htmltools)
+library(tidyr)
+library(dplyr)
+library(webshot)
+library(htmlwidgets)
+library(pander)
 
 
 rm(list = ls())
@@ -53,16 +57,13 @@ coord.r2 <- st_coordinates(r2)
 raster.r2 <- data.frame(lon = coord.r2[,1], lat = coord.r2[,2], value = r2$pop) |> with(interp(x = lon, y = lat, z = value, xo = seq(min(lon), max(lon), length = 100), yo = seq(min(lat), max(lat), length = 100))) |> raster()
 
 # Load the Saudi Arabia boundary
-boundaryregion <- geoboundaries("Saudi Arabia") |> st_set_crs(4326) |> st_transform(crs(proj4string(raster.r2)))
+boundaryregion_sp <- geoboundaries("Saudi Arabia") |> st_set_crs(4326) |> st_transform(crs(proj4string(raster.r2))) |> as("Spatial")
 
-# Convert boundaryregion to SpatialPolygons
-boundaryregion_sp <- as(boundaryregion, "Spatial")
 # Clip the raster to the Saudi Arabia boundary
 clipped.raster.r2 <- mask(raster.r2, boundaryregion_sp)
-
-
 range_values <- range(values(clipped.raster.r2), na.rm = TRUE)
 pal <- colorNumeric("viridis", range_values, na.color = "transparent")
+
 leaflet() %>%
   addProviderTiles(providers$CartoDB.Positron) %>%
   addRasterImage(clipped.raster.r2, colors = pal, opacity = 0.5) %>%
@@ -78,25 +79,13 @@ leaflet() %>%
 # retrieve coordinates in matrix form, from an sf object
 coord.dpol <- st_coordinates(dpol)
 
-# get a data frame 
-DF.dpol <- data.frame(lon = coord.dpol[,1], lat = coord.dpol[,2], value = dpol$pm252012g)
-
 # Interpolate to a regular grid
 
-interp.dpol <- with(DF.dpol, interp(x = lon, y = lat, z = value, 
-                                    xo = seq(min(lon), max(lon), length = 100), 
-                                    yo = seq(min(lat), max(lat), length = 100)))
-
-# Create a raster from the interpolated result
-raster.dpol <- raster(interp.dpol)
+raster.dpol <- data.frame(lon = coord.dpol[,1], lat = coord.dpol[,2], value = dpol$pm252012g) |> with(interp(x = lon, y = lat, z = value, xo = seq(min(lon), max(lon), length = 100), yo = seq(min(lat), max(lat), length = 100))) |> raster()
 
 # Load the Saudi Arabia boundary
-boundaryregion <- geoboundaries("Saudi Arabia")
-boundaryregion <- st_set_crs(boundaryregion, 4326)
-boundaryregion <- st_transform(boundaryregion, crs(proj4string(raster.dpol)))
+boundaryregion_sp <- geoboundaries("Saudi Arabia") |> st_set_crs(4326) |> st_transform(crs(proj4string(raster.dpol))) |> as("Spatial")
 
-# Convert boundaryregion to SpatialPolygons
-boundaryregion_sp <- as(boundaryregion, "Spatial")
 # Clip the raster to the Saudi Arabia boundary
 clipped.raster.dpol <- mask(raster.dpol, boundaryregion_sp)
 
@@ -128,13 +117,10 @@ inter <- st_intersects(map, dpol)
 map$pm25xpop <- sapply(inter, FUN = function(x){sum(dpol[x, ]$pm25Xpop, na.rm = TRUE)})
 map$sumpop <- sapply(inter, FUN = function(x){sum(dpol[x, ]$pop, na.rm = TRUE)})
 map$pm25weightedpop <- map$pm25xpop/map$sumpop
-
-
-library(leaflet)
 map$pm25weightedpop <- map$pm2.5 
-l <- leaflet(map) %>% addTiles()
+
 pal <- colorNumeric(palette = "viridis", domain = map$pm25weightedpop)
-l %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(pm25weightedpop), fillOpacity = 0.5) %>%
+leaflet(map) %>% addTiles() %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(pm25weightedpop), fillOpacity = 0.5) %>%
   addLegend(pal = pal, values = ~pm25weightedpop, opacity = 0.5, title = htmltools::HTML("WPM<sub>2.5</sub>"), position = "bottomright")
 
 
@@ -144,9 +130,6 @@ l %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(pm25weightedpop),
 
 data <- read.csv("fulldata.csv", header = T)
 
-# Load necessary libraries
-library(tidyr)
-library(dplyr)
 
 # Sample data
 data <- data.frame(
@@ -195,7 +178,6 @@ data <- data[order(
 
 n.strata <- 1
 
-library(SpatialEpi)
 
 E <- expected(
   population = data$populatin,
@@ -239,12 +221,10 @@ map <- merge(map, dw1, by.x = "name", by.y = "name")
 map_sf <- st_as_sf(map)
 
 
-library(tidyr)
 map_sf <- gather(map_sf, year, SIR, paste0("SIR.", 2001:2004))
 
 map_sf$year <- as.integer(substring(map_sf$year, 5, 8))
 
-library(ggplot2)
 ggplot(map_sf) + geom_sf(aes(fill = SIR)) +
   facet_wrap(~year, dir = "h", ncol = 4) +
   ggtitle("SIR") + theme_bw() +
@@ -267,8 +247,7 @@ d1$idtime <- 1 + d1$year - min(d1$year)
 formula <- Y ~  data$WPM2.5 +  offset(log(E))+f(idarea, model = "bym", graph = g) +
   f(idarea1, idtime, model = "iid") + idtime
 
-library(INLA)
-library(spdep)
+
 nb <- poly2nb(map)
 head(nb)
 
@@ -289,7 +268,6 @@ summary(res)
 # Table of the estimate
 #########################
 
-library(pander)
 
 
 pander(round(res$summary.fixed[,c(1,3,5)],2))
@@ -313,13 +291,11 @@ map_sf <- merge(
 
 newdata <- map_sf[, c("name", "year", "RR", "exc")]
 
-library(tidyr)
-library(dplyr)
+
 
 # Assuming 'data_map_sf' is your sf object
 # First, ensure that 'data_map_sf' only contains the relevant columns if there are extras
-library(tidyr)
-library(dplyr)
+
 
 # Assuming 'data_map_sf' is your sf object
 # Selecting necessary columns if there are extras
@@ -339,18 +315,13 @@ data_wide <- data_map_sf %>%
 m <- as(data_wide, "Spatial")
 
 
-# View the transformed data
-
-
-
-l <- leaflet(m) %>% addTiles()
 pal <- colorNumeric(palette = "viridis", domain = m$RR_Year_2001)
-l %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(RR_Year_2001), fillOpacity = 0.5) %>%
+leaflet(m) %>% addTiles() %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(RR_Year_2001), fillOpacity = 0.5) %>%
   addLegend(pal = pal, values = ~RR_Year_2001, opacity = 0.5, title = htmltools::HTML("RR"), position = "bottomright")
 
-l <- leaflet(m) %>% addTiles()
+
 pal <- colorNumeric(palette = "viridis", domain = m$exc_Year_2001)
-l %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(exc_Year_2001), fillOpacity = 0.5) %>%
+leaflet(m) %>% addTiles() %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(exc_Year_2001), fillOpacity = 0.5) %>%
   addLegend(pal = pal, values = ~exc_Year_2001, opacity = 0.5, title = htmltools::HTML("Cluster"), position = "bottomright")
 
 
@@ -360,34 +331,13 @@ map2 <- as(map, "Spatial")
 
 
 
-library(shiny)
-library(leaflet)
-library(sp)
+
+
 
 # Assuming data_wide is already defined in your environment
 m <- as(data_wide, "Spatial")
 
-library(shiny)
-library(rmarkdown)
-library(htmltools)
-library(leaflet)
-library(sf)
-library(ggplot2)
-library(dplyr)
-library(webshot)
-library(htmlwidgets)
 
-
-library(shiny)
-library(leaflet)
-library(sf)
-library(ggplot2)
-library(dplyr)
-library(webshot)
-library(htmlwidgets)
-library(rmarkdown)
-library(htmltools)
-library(terra)
 
 
 ui <- fluidPage(
