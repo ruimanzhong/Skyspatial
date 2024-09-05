@@ -1,4 +1,4 @@
-setwd("~/Downloads/6. Fall 2024/Skyspatial/Saudi-Arabia-Shiny 2")
+#setwd("~/Downloads/6. Fall 2024/Skyspatial/Saudi-Arabia-Shiny 2")
 library(readxl)
 library(sf)
 library(ggplot2)
@@ -20,91 +20,40 @@ library(rmarkdown)
 library(htmltools)
 
 
+rm(list = ls())
+theme_set(theme_minimal())
 
-##################
 # Get the map of Saudi Arabia
-##################
+map <- ne_states(country = "Saudi Arabia", returnclass = "sf") |> mutate(name = replace(name, name == name[5], "Asir")) |> st_set_crs(4326) |> arrange(name) |> dplyr::select(name, geometry)
+bb <- st_bbox(map)
 
-map <- ne_states(country = "Saudi Arabia", returnclass = "sf")
-map$name[5] <- "Asir" # change spellings
-map <- st_set_crs(map, 4326) # certain projection
-map <- map[order(map$name),] # alphabetically ordered
-map <- map %>% dplyr::select(name, geometry)
-maplatlong <- st_transform(map, 4326)
-
-#################################
-# Population of Saudi Arabia
-#################################
-
-# Read the Saudi Arabia population raster for the year 2017
-r <- terra::rast("pop2017.tif")
-# Ensure raster is in EPSG:4326 
-r <- terra::project(r, "EPSG:4326")
-
-# Aggregate raster to lower resolution
-r <- terra::aggregate(r, fact=10, fun=sum)
+# Population of Saudi Arabia 2017
+r <- terra::rast("pop2017.tif") |> terra::project("EPSG:4326") |> terra::aggregate(fact = 10, fun = sum)
+# Read the pm2.5 data as grid for 2017
+data <- terra::rast("pm2.5.2017.tif") |> terra::aggregate(fact = 10, fun = mean) |> crop(bb)
 
 # Sum population in regions of map
 map$popraster <- terra::extract(r, map, sum, na.rm = TRUE)$pop2017
-
-# Read the pm2.5 data as grid for 2017
-data <- terra::rast("pm2.5.2017.tif")
-data <- terra::aggregate(data, fact=10, fun=mean)
-
-
-bb <- st_bbox(maplatlong)
-data <- crop(data, bb)
-
 # Sum pm in regions of map
 map$pm2.5 <- terra::extract(data, map, mean, na.rm = TRUE)$pm2.5.2017
 
 # Modify the data for plot
-data2 <- as.data.frame(data, xy = TRUE)
-names(data2) <- c("lon", "lat", "value")
+data2 <- as.data.frame(data, xy = TRUE) |> rename(lon = x, lat = y, value = pm2.5.2017)
 
-dpol <- st_as_sf(data2, coords = c("lon", "lat"), crs = 4326)
-dpol <- st_filter(dpol, map)
-dpol$pm252012g <- as.numeric(dpol$value)
-
-#
-#
+dpol <- st_as_sf(data2, coords = c("lon", "lat"), crs = 4326) |> st_filter(map) |> mutate(pm252012g = as.numeric(value)) 
 
 
 # (1) plot the population raster
-r2 <- as.data.frame(r, xy = TRUE)
-names(r2) <- c("lon", "lat", "value")
-r2 <- st_as_sf(r2, coords = c("lon", "lat"), crs = 4326)
-
-theme_set(theme_minimal())
-boundaryregion.c <- st_union(map)
-r2 <- st_filter(r2, map)
-r2$populatin <- as.numeric(r2$value)
-r2 <- r2[r2$populatin >= 1, ]
-r2$pop <- log(r2$populatin)
+r2 <- as.data.frame(r, xy = TRUE) |> rename(lon = x, lat = y, value = pop2017) |> st_as_sf(coords = c("lon", "lat"), crs = 4326) |> st_filter(map) |> mutate(populatin = as.numeric(value)) |> filter(populatin >= 1) |> mutate(pop = log(populatin))
 
 # retrieve coordinates in matrix form, from an sf object
 coord.r2 <- st_coordinates(r2)
 
-# get a data frame 
-DF.r2 <- data.frame(lon = coord.r2[,1], lat = coord.r2[,2], value = r2$pop)
-
 # Interpolate to a regular grid
-
-
-interp.r2 <- with(DF.r2, interp(x = lon, y = lat, z = value, 
-                                xo = seq(min(lon), max(lon), length = 100), 
-                                yo = seq(min(lat), max(lat), length = 100)))
-
-
-
-# Create a raster from the interpolated result
-
-raster.r2 <- raster(interp.r2)
+raster.r2 <- data.frame(lon = coord.r2[,1], lat = coord.r2[,2], value = r2$pop) |> with(interp(x = lon, y = lat, z = value, xo = seq(min(lon), max(lon), length = 100), yo = seq(min(lat), max(lat), length = 100))) |> raster()
 
 # Load the Saudi Arabia boundary
-boundaryregion <- geoboundaries("Saudi Arabia")
-boundaryregion <- st_set_crs(boundaryregion, 4326)
-boundaryregion <- st_transform(boundaryregion, crs(proj4string(raster.r2)))
+boundaryregion <- geoboundaries("Saudi Arabia") |> st_set_crs(4326) |> st_transform(crs(proj4string(raster.r2)))
 
 # Convert boundaryregion to SpatialPolygons
 boundaryregion_sp <- as(boundaryregion, "Spatial")
@@ -180,15 +129,6 @@ map$pm25xpop <- sapply(inter, FUN = function(x){sum(dpol[x, ]$pm25Xpop, na.rm = 
 map$sumpop <- sapply(inter, FUN = function(x){sum(dpol[x, ]$pop, na.rm = TRUE)})
 map$pm25weightedpop <- map$pm25xpop/map$sumpop
 
-# (3) plot weighted PM25
-
-# boundaryregion.c <- st_union(map)
-# map1 <- st_as_sf(map)
-#  ggplot(data = boundaryregion.c) +
-#   geom_sf() +
-#   geom_sf(data = map1, aes(fill = pm25weightedpop)) +
-#   scale_fill_viridis_c(option = "viridis") +
-#   labs(fill = expression(WPM[2.5]))
 
 library(leaflet)
 map$pm25weightedpop <- map$pm2.5 
