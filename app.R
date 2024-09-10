@@ -64,14 +64,11 @@ clipped.raster.r2 <- mask(raster.r2, boundaryregion_sp)
 range_values <- range(values(clipped.raster.r2), na.rm = TRUE)
 pal <- colorNumeric("viridis", range_values, na.color = "transparent")
 
-leaflet() %>%
-  addProviderTiles(providers$CartoDB.Positron) %>%
-  addRasterImage(clipped.raster.r2, colors = pal, opacity = 0.5) %>%
-  addLegend("bottomright", pal = pal, values = values(clipped.raster.r2), title = htmltools::HTML("Log(P)")) %>%
-  addScaleBar(position = c("bottomleft"))
-
-
-
+# leaflet() %>%
+#   addProviderTiles(providers$CartoDB.Positron) %>%
+#   addRasterImage(clipped.raster.r2, colors = pal, opacity = 0.5) %>%
+#   addLegend("bottomright", pal = pal, values = values(clipped.raster.r2), title = htmltools::HTML("Log(P)")) %>%
+#   addScaleBar(position = c("bottomleft"))
 
 
 # (2) plot the PM2.5
@@ -92,11 +89,11 @@ clipped.raster.dpol <- mask(raster.dpol, boundaryregion_sp)
 
 range_values <- range(values(clipped.raster.dpol), na.rm = TRUE)
 pal <- colorNumeric("viridis", range_values, na.color = "transparent")
-leaflet() %>%
-  addProviderTiles(providers$CartoDB.Positron) %>%
-  addRasterImage(clipped.raster.dpol, colors = pal, opacity = 0.5) %>%
-  addLegend("bottomright", bins = c(0,20,40,60,80), pal = pal, values = values(clipped.raster.dpol), title = htmltools::HTML("PM<sub>2.5</sub>")) %>%
-  addScaleBar(position = c("bottomleft"))
+# leaflet() %>%
+#   addProviderTiles(providers$CartoDB.Positron) %>%
+#   addRasterImage(clipped.raster.dpol, colors = pal, opacity = 0.5) %>%
+#   addLegend("bottomright", bins = c(0,20,40,60,80), pal = pal, values = values(clipped.raster.dpol), title = htmltools::HTML("PM<sub>2.5</sub>")) %>%
+#   addScaleBar(position = c("bottomleft"))
 
 
 
@@ -120,15 +117,15 @@ map$pm25weightedpop <- map$pm25xpop/map$sumpop
 map$pm25weightedpop <- map$pm2.5 
 
 pal <- colorNumeric(palette = "viridis", domain = map$pm25weightedpop)
-leaflet(map) %>% addTiles() %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(pm25weightedpop), fillOpacity = 0.5) %>%
-  addLegend(pal = pal, values = ~pm25weightedpop, opacity = 0.5, title = htmltools::HTML("WPM<sub>2.5</sub>"), position = "bottomright")
+# leaflet(map) %>% addTiles() %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(pm25weightedpop), fillOpacity = 0.5) %>%
+#   addLegend(pal = pal, values = ~pm25weightedpop, opacity = 0.5, title = htmltools::HTML("WPM<sub>2.5</sub>"), position = "bottomright")
 
 
 ##################
 # Get the data
 ##################
 
-data <- read.csv("fulldata.csv", header = T)
+# data <- read.csv("fulldata.csv", header = T)
 
 
 # Sample data
@@ -225,17 +222,17 @@ map_sf <- gather(map_sf, year, SIR, paste0("SIR.", 2001:2004))
 
 map_sf$year <- as.integer(substring(map_sf$year, 5, 8))
 
-ggplot(map_sf) + geom_sf(aes(fill = SIR)) +
-  facet_wrap(~year, dir = "h", ncol = 4) +
-  ggtitle("SIR") + theme_bw() +
-  theme(
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    axis.ticks = element_blank()
-  ) +
-  scale_fill_gradient2(
-    midpoint = 1, low = "blue", mid = "white", high = "red" 
-  ) 
+# ggplot(map_sf) + geom_sf(aes(fill = SIR)) +
+#   facet_wrap(~year, dir = "h", ncol = 4) +
+#   ggtitle("SIR") + theme_bw() +
+#   theme(
+#     axis.text.x = element_blank(),
+#     axis.text.y = element_blank(),
+#     axis.ticks = element_blank()
+#   ) +
+#   scale_fill_gradient2(
+#     midpoint = 1, low = "blue", mid = "white", high = "red" 
+#   ) 
 
 
 
@@ -292,11 +289,6 @@ map_sf <- merge(
 newdata <- map_sf[, c("name", "year", "RR", "exc")]
 
 
-
-# Assuming 'data_map_sf' is your sf object
-# First, ensure that 'data_map_sf' only contains the relevant columns if there are extras
-
-
 # Assuming 'data_map_sf' is your sf object
 # Selecting necessary columns if there are extras
 data_map_sf <- newdata %>%
@@ -315,26 +307,20 @@ data_wide <- data_map_sf %>%
 m <- as(data_wide, "Spatial")
 
 
-pal <- colorNumeric(palette = "viridis", domain = m$RR_Year_2001)
-leaflet(m) %>% addTiles() %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(RR_Year_2001), fillOpacity = 0.5) %>%
-  addLegend(pal = pal, values = ~RR_Year_2001, opacity = 0.5, title = htmltools::HTML("RR"), position = "bottomright")
-
-
-pal <- colorNumeric(palette = "viridis", domain = m$exc_Year_2001)
-leaflet(m) %>% addTiles() %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(exc_Year_2001), fillOpacity = 0.5) %>%
-  addLegend(pal = pal, values = ~exc_Year_2001, opacity = 0.5, title = htmltools::HTML("Cluster"), position = "bottomright")
+# pal <- colorNumeric(palette = "viridis", domain = m$RR_Year_2001)
+# leaflet(m) %>% addTiles() %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(RR_Year_2001), fillOpacity = 0.5) %>%
+#   addLegend(pal = pal, values = ~RR_Year_2001, opacity = 0.5, title = htmltools::HTML("RR"), position = "bottomright")
+# 
+# 
+# pal <- colorNumeric(palette = "viridis", domain = m$exc_Year_2001)
+# leaflet(m) %>% addTiles() %>% addPolygons(color = "grey", weight = 1, fillColor = ~pal(exc_Year_2001), fillOpacity = 0.5) %>%
+#   addLegend(pal = pal, values = ~exc_Year_2001, opacity = 0.5, title = htmltools::HTML("Cluster"), position = "bottomright")
 
 
 
 map2 <- as(map, "Spatial")
 
 
-
-
-
-
-
-# Assuming data_wide is already defined in your environment
 m <- as(data_wide, "Spatial")
 
 
@@ -430,7 +416,7 @@ server <- function(input, output, session) {
       pal <- colorNumeric("viridis", range_values, na.color = "transparent")
       
       leaflet() %>%
-        addProviderTiles(providers$CartoDB.Positron) %>%
+        addTiles() %>%
         addRasterImage(clipped.raster.dpol, colors = pal, opacity = 0.5) %>%
         addLegend("bottomright",bins = c(0,15,30,45,60,75,90), pal = pal, values = values(clipped.raster.dpol), title = htmltools::HTML("PM<sub>2.5</sub>")) %>%
         addScaleBar(position = c("bottomleft"))
@@ -441,7 +427,7 @@ server <- function(input, output, session) {
       pal <- colorNumeric("viridis", range_values, na.color = "transparent")
       
       leaflet() %>%
-        addProviderTiles(providers$CartoDB.Positron) %>%
+        addTiles() %>%
         addRasterImage(clipped.raster.no3, colors = pal, opacity = 0.5) %>%
         addLegend("bottomright", pal = pal, values = values(clipped.raster.no3), title = htmltools::HTML("NO<sub>3</sub>")) %>%
         addScaleBar(position = c("bottomleft"))
