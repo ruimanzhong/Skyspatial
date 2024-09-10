@@ -32,12 +32,12 @@ map <- ne_states(country = "Saudi Arabia", returnclass = "sf") |> mutate(name = 
 bb <- st_bbox(map)
 
 # Population of Saudi Arabia 2017
-r <- terra::rast("pop2017.tif") |> terra::project("EPSG:4326") |> terra::aggregate(fact = 10, fun = sum)
+r <- terra::rast(here("SApop/sau_pd_2017_1km.tif")) |> terra::project("EPSG:4326") |> terra::aggregate(fact = 10, fun = sum)
 # Read the pm2.5 data as grid for 2017
-data <- terra::rast("pm2.5.2017.tif") |> terra::aggregate(fact = 10, fun = mean) |> crop(bb)
+#data <- terra::rast("pm2.5.2017.tif") |> terra::aggregate(fact = 10, fun = mean) |> crop(bb)
 
 # Sum population in regions of map
-map$popraster <- terra::extract(r, map, sum, na.rm = TRUE)$pop2017
+map$popraster <- terra::extract(r, map, sum, na.rm = TRUE)$sau_pd_2017_1km
 # Sum pm in regions of map
 map$pm2.5 <- terra::extract(data, map, mean, na.rm = TRUE)$pm2.5.2017
 

@@ -39,7 +39,7 @@ maplatlong <- st_transform(map, 4326)
 
 
 # # Read the saudi arabia population raster for year 2018
-r <- terra::rast("~/Desktop/files/PhD/Projects/project3/SummerProject3/Nojoud/Data2017/data/pop2017.tif")
+r <- terra::rast(here("SApop/sau_pd_2017_1km.tif"))
 # # Ensure raster is in EPSG:4326 
 r <- terra::project(r, "EPSG:4326")
 plot(r)
@@ -48,7 +48,7 @@ plot(r)
 r <- terra::project(r, "EPSG:4326") 
 # 
 # # # Sum population in regions of map
-map$popraster <- terra::extract(r, map, sum, na.rm = TRUE)$pop2017
+map$popraster <- terra::extract(r, map, sum, na.rm = TRUE)$sau_pd_2017_1km
 # # 
 # # # modify the data for plot
 r2 <- as.data.frame(r, xy = TRUE)
@@ -60,7 +60,7 @@ r2 <- st_as_sf(r2, coords = c("lon", "lat"), crs = 4326)
 
 # read the pm2.5 data as grid for 2017
 
-data <- terra::rast("~/Desktop/files/PhD/Projects/project3/SummerProject3/Nojoud/Data2017/data/pm2.5.2017.tif")
+data <- terra::rast(here("SApm2.5/pm2.5.2017.tif"))
 data <- terra::aggregate(data, fact=2)
 
 bb <- st_bbox(maplatlong)
