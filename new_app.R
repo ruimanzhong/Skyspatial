@@ -222,20 +222,6 @@ map_sf <- gather(map_sf, year, SIR, paste0("SIR.", 2001:2004))
 
 map_sf$year <- as.integer(substring(map_sf$year, 5, 8))
 
-# ggplot(map_sf) + geom_sf(aes(fill = SIR)) +
-#   facet_wrap(~year, dir = "h", ncol = 4) +
-#   ggtitle("SIR") + theme_bw() +
-#   theme(
-#     axis.text.x = element_blank(),
-#     axis.text.y = element_blank(),
-#     axis.ticks = element_blank()
-#   ) +
-#   scale_fill_gradient2(
-#     midpoint = 1, low = "blue", mid = "white", high = "red" 
-#   ) 
-
-
-
 
 d1$idarea <- as.numeric(as.factor(d1$name))
 d1$idarea1 <- d1$idarea
