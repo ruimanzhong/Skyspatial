@@ -71,26 +71,10 @@ d1 <- d1 %>%
 formula <- disease ~  WPM2.5 +  offset(log(E))+f(idarea, model = "bym", graph = g) +
   f(idarea1, idtime, model = "iid") + idtime
 
-
-
-
-
 res <- inla(formula,
             family = "poisson", data = d1, E = E,
             control.predictor = list(compute = TRUE), #compute the posteriors of the predictions
             control.compute = list(return.marginals.predictor = TRUE), verbose = FALSE)
-
-
-summary(res)
-
-
-#########################
-# Table of the estimate
-#########################
-
-
-
-pander(round(res$summary.fixed[,c(1,3,5)],2))
 
 
 d1 <- d1 %>%
