@@ -1,33 +1,43 @@
-library(here)
+library(readxl)
 library(sf)
+library(ggplot2)
+library(rgeoboundaries)
+library(rnaturalearth)
+library(SpatialEpi)
+library(spdep)
+library(INLA)
+library(sp)
+library(Matrix)
+library(spData)
+library(akima)
+library(terra)
+library(raster)
+library(leaflet)
+library(shiny)
+library(rmarkdown)
+library(htmltools)
+library(tidyr)
+library(dplyr)
+library(webshot)
+library(htmlwidgets)
+library(pander)
+library(here)
+
 
 rm(list = ls())
 load(here("map_pop_pm2.5_2000_2019.RData"))
 initial_map <- map
 map <- initial_map %>% 
-  filter(year == 2000) #%>% dplyr::select(geometry)
+  filter(year == 2000) %>% dplyr::select(name, geometry)
 
 data <- initial_map %>% 
   st_drop_geometry() %>% 
-  mutate(Cancer = sample(500:700, size = n(), replace = TRUE)) %>%
-  rename(populatin = population, WPM2.5 = pm25weightedpop) 
+  mutate(disease = sample(500:700, size = n(), replace = TRUE)) %>%
+  rename(WPM2.5 = pm25weightedpop) 
 
-# Pivot the data to wider format
-data_wide <- data %>%
-  pivot_wider(names_from = year, values_from = c(Cancer, WPM2.5, populatin), names_sep = "_")
+d <- data
 
-# View the transformed data
-data2 <- as.data.frame(data_wide)
-
-
-
-d1 <- aggregate(
-  x = data$Cancer,
-  by = list(county = data$name, year = data$year),
-  FUN = sum
-)
-names(d1) <- c("name", "year", "Y")
-
+HepatitisC <- read.csv("HepatitisC.csv")
 
 
 data <- data[order(
@@ -35,76 +45,41 @@ data <- data[order(
   data$year
 ), ]
 
-
-n.strata <- 1
-
-
-E <- expected(
-  population = data$populatin,
-  cases = data$Cancer,
-  n.strata = n.strata
-)
+d1 <- data.frame(name = rep(unique(data$name), each = length(unique(data$year))), 
+                 year = rep(unique(data$year), times = length(unique(data$name))), 
+                 E = expected(population = data$population, cases = data$disease, n.strata = 1)) %>%
+  merge(d, ., by = c("name", "year")) %>%
+  mutate(SIR = disease / E)
 
 
+map <- reshape(d1, timevar = "year", idvar = "name", direction = "wide") %>%
+  merge(map, ., by.x = "name", by.y = "name")
+
+map_sf <- map %>% gather(year, SIR, paste0("SIR.", 2000:2019)) %>%
+  mutate(year = as.integer(substring(year, 5, 8)))
 
 
-nyears <- length(unique(data$year))
-countiesE <- rep(unique(data$name),
-                 each = nyears)
+nb2INLA("map.adj", poly2nb(map))
+g <- inla.read.graph(filename = "map.adj")
 
-ncounties <- length(unique(data$name))
-yearsE <- rep(unique(data$year),
-              times = ncounties)
+d1 <- d1 %>%
+  mutate(
+    idarea = as.numeric(as.factor(name)),
+    idarea1 = idarea,
+    idtime = 1 + year - min(year)
+  )
 
-dE1 <- data.frame(name = countiesE, year = yearsE, E = E)
-
-
-d1 <- merge(d1, dE1, by = c("name", "year"))
-
-d1$SIR <- d1$Y / d1$E
-head(d1)
-
-
-
-dw1 <- reshape(d1,
-               timevar = "year",
-               idvar = "name",
-               direction = "wide"
-)
-
-
-
-
-map <- merge(map, dw1, by.x = "name", by.y = "name")
-
-
-map_sf <- st_as_sf(map)
-
-
-map_sf <- gather(map_sf, year, SIR, paste0("SIR.", 2001:2004))
-
-map_sf$year <- as.integer(substring(map_sf$year, 5, 8))
-
-
-d1$idarea <- as.numeric(as.factor(d1$name))
-d1$idarea1 <- d1$idarea
-d1$idtime <- 1 + d1$year - min(d1$year)
-
-formula <- Y ~  data$WPM2.5 +  offset(log(E))+f(idarea, model = "bym", graph = g) +
+formula <- disease ~  WPM2.5 +  offset(log(E))+f(idarea, model = "bym", graph = g) +
   f(idarea1, idtime, model = "iid") + idtime
 
 
-nb <- poly2nb(map)
-head(nb)
 
-nb2INLA("map.adj", nb)
-g <- inla.read.graph(filename = "map.adj")
 
 
 res <- inla(formula,
             family = "poisson", data = d1, E = E,
             control.predictor = list(compute = TRUE), #compute the posteriors of the predictions
-            control.compute = list(return.marginals.predictor = TRUE), verbose = T)
+            control.compute = list(return.marginals.predictor = TRUE), verbose = FALSE)
 
 
 summary(res)
@@ -119,48 +94,25 @@ summary(res)
 pander(round(res$summary.fixed[,c(1,3,5)],2))
 
 
+d1 <- d1 %>%
+  mutate(
+    RR = res$summary.fitted.values[, "mean"],
+    exc = sapply(res$marginals.fitted.values, 
+                 FUN = function(marg) { 1 - inla.pmarginal(q = 1.1, marginal = marg) })
+  )
 
-d1$RR <- res$summary.fitted.values[, "mean"]
-
-d1$exc <- sapply(res$marginals.fitted.values,
-                 FUN = function(marg){1 - inla.pmarginal(q = 1.1, marginal = marg)})
-
-
-map_sf <- merge(
+m <- merge(
   map_sf, d1,
   by.x = c("name", "year"),
   by.y = c("name", "year")
-)
-
-
-
-
-newdata <- map_sf[, c("name", "year", "RR", "exc")]
-
-
-# Assuming 'data_map_sf' is your sf object
-# Selecting necessary columns if there are extras
-data_map_sf <- newdata %>%
-  dplyr::select(name, year, RR, exc, geometry)
-
-# Pivoting to wide format to separate both RR and exc
-data_wide <- data_map_sf %>%
+) %>%
+  dplyr::select(name, year, RR, exc, geometry) %>%
   pivot_wider(
     names_from = year,
     values_from = c(RR, exc),
     names_sep = "_",             # Separator between the name components
     names_prefix = "Year_"       # Prefix to indicate the year for clarity
   )
-
-
-m <- as(data_wide, "Spatial")
-
-
-map2 <- as(map, "Spatial")
-
-
-m <- as(data_wide, "Spatial")
-
 
 
 
@@ -202,7 +154,7 @@ ui <- fluidPage(
     "))
   ),
   titlePanel(
-    title = div("Assess the impact of pollution on cancer", class = "title-panel-custom")
+    title = div("Assess the impact of pollution on disease", class = "title-panel-custom")
   ),
   sidebarLayout(
     sidebarPanel(
@@ -279,7 +231,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$filedata, {
     output$yearSlider <- renderUI({
-      sliderInput("year", "Select Year:", min = 2001, max = 2004, value = 2001, step = 1, sep = "")
+      sliderInput("year", "Select Year:", min = 2000, max = 2019, value = 2000, step = 1, sep = "")
     })
     output$resultsTitle <- renderUI({
       tags$h4("Results")
@@ -294,28 +246,27 @@ server <- function(input, output, session) {
   
   output$mymap1 <- renderLeaflet({
     req(input$year)
-    map2 <- m
     year <- input$year
     exc_col <- paste0("exc_Year_", year)
-    pal <- colorNumeric(palette = "viridis", domain = map2[[exc_col]])
+    pal <- colorNumeric(palette = "viridis", domain = m[[exc_col]])
     
-    leaflet(map2) %>%
+    leaflet(m) %>%
       addTiles() %>%
       addPolygons(
         color = "grey",
         weight = 1,
-        fillColor = ~pal(map2[[exc_col]]),
+        fillColor = ~pal(m[[exc_col]]),
         fillOpacity = 0.5,
         highlight = highlightOptions(
           weight = 3,
           color = "#666",
           fillOpacity = 0.7,
           bringToFront = TRUE),
-        label = ~paste(name, "Cluster:", map2[[exc_col]])
+        label = ~paste(name, "Cluster:", m[[exc_col]])
       ) %>%
       addLegend(
         pal = pal,
-        values = ~map2[[exc_col]],
+        values = ~m[[exc_col]],
         opacity = 0.5,
         title = htmltools::HTML("Cluster"),
         position = "bottomright"
@@ -324,28 +275,27 @@ server <- function(input, output, session) {
   
   output$mymap2 <- renderLeaflet({
     req(input$year)
-    map2 <- m
     year <- input$year
     rr_col <- paste0("RR_Year_", year)
-    pal <- colorNumeric(palette = "viridis", domain = map2[[rr_col]])
+    pal <- colorNumeric(palette = "viridis", domain = m[[rr_col]])
     
-    leaflet(map2) %>%
+    leaflet(m) %>%
       addTiles() %>%
       addPolygons(
         color = "grey",
         weight = 1,
-        fillColor = ~pal(map2[[rr_col]]),
+        fillColor = ~pal(m[[rr_col]]),
         fillOpacity = 0.5,
         highlight = highlightOptions(
           weight = 3,
           color = "#666",
           fillOpacity = 0.7,
           bringToFront = TRUE),
-        label = ~paste(name, "RR:", map2[[rr_col]])
+        label = ~paste(name, "RR:", m[[rr_col]])
       ) %>%
       addLegend(
         pal = pal,
-        values = ~map2[[rr_col]],
+        values = ~m[[rr_col]],
         opacity = 0.5,
         title = htmltools::HTML("RR"),
         position = "bottomright"
