@@ -21,7 +21,7 @@ library(dplyr)
 library(webshot)
 library(htmlwidgets)
 library(pander)
-
+library(here)
 
 rm(list = ls())
 theme_set(theme_minimal())
@@ -65,10 +65,9 @@ bb <- st_bbox(initial_map)
       rename(lon = x, lat = y, value = paste0("pm2.5.", year)) %>%
       st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
       st_filter(map) %>%
-      mutate(pm25g = as.numeric(value)) %>%
-      mutate(
-        pm25Xpop = pm25g * terra::extract(r, st_coordinates(.))[[1]],
-        pop = terra::extract(r, st_coordinates(.))[[1]]
+      mutate(pm25g = as.numeric(value),
+             pm25Xpop = pm25g * terra::extract(r, st_coordinates(.))[[1]],
+             pop = terra::extract(r, st_coordinates(.))[[1]]
       )
     
     # Spatial intersection between map and PM2.5 spatial data
@@ -77,11 +76,11 @@ bb <- st_bbox(initial_map)
     # Calculate weighted population PM2.5 values
     map$pm25xpop <- sapply(inter, FUN = function(x){sum(dpol[x, ]$pm25Xpop, na.rm = TRUE)})
     map$sumpop <- sapply(inter, FUN = function(x){sum(dpol[x, ]$pop, na.rm = TRUE)})
-    map$pm25weightedpop <- map$pm25xpop / map$sumpop
+    map$WPM2.5 <- map$pm25xpop / map$sumpop
     
     # Select relevant columns and add the current year
     map <- map %>%
-      dplyr::select(name, population, pm25weightedpop) %>%
+      dplyr::select(name, population, WPM2.5) %>%
       mutate(year = year)
     
     # Store the map for this year in the list
@@ -91,5 +90,20 @@ bb <- st_bbox(initial_map)
 # Combine all yearly maps into one data frame
 map <- bind_rows(map_list)
 
+# The following is just to get clipped.raster.dpol
+
+coord.dpol <- st_coordinates(dpol)
+
+raster.dpol <- data.frame(lon = coord.dpol[,1], lat = coord.dpol[,2], value = dpol$pm25g) %>% 
+  with(interp(x = lon, y = lat, z = value, xo = seq(min(lon), max(lon), length = 100), yo = seq(min(lat), max(lat), length = 100))) %>%
+  raster()
+
+# Load the Saudi Arabia boundary
+boundaryregion_sp <- geoboundaries("Saudi Arabia") %>% st_set_crs(4326) %>% st_transform(crs(proj4string(raster.dpol))) %>% as("Spatial")
+
+# Clip the raster to the Saudi Arabia boundary
+clipped.raster.dpol <- mask(raster.dpol, boundaryregion_sp)
+
+
 # Save the final map as an RDS file
-save(map, file = here("map_pop_pm2.5_2000_2019.RData"))
+save(map, clipped.raster.dpol, file = here("map_pop_pm2.5_2000_2019.RData"))

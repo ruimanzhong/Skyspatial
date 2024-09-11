@@ -32,8 +32,7 @@ map <- initial_map %>%
 
 data <- initial_map %>% 
   st_drop_geometry() %>% 
-  mutate(disease = sample(500:700, size = n(), replace = TRUE)) %>%
-  rename(WPM2.5 = pm25weightedpop) 
+  mutate(disease = sample(500:700, size = n(), replace = TRUE))
 
 d <- data
 
