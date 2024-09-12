@@ -25,18 +25,31 @@ library(here)
 
 
 rm(list = ls())
+
+data_analyzer <- function(input){
+
+disease_df <- input %>% 
+  mutate(year = year - 3) %>%
+  rename(name = regions, disease = cases)
+
+cov_names <- names(disease_df)[!names(disease_df) %in% c("name", "year", "disease")]
+
+years_to_do_analysis <- disease_df$year %>% unique() %>% sort()
+min_year <- min(years_to_do_analysis)
+max_year <- max(years_to_do_analysis)
+
+
 load(here("map_pop_pm2.5_2000_2019.RData"))
 initial_map <- map
 map <- initial_map %>% 
-  filter(year == 2000) %>% dplyr::select(name, geometry)
+  filter(year == 2000) %>% dplyr::select(name, geometry) # 2000 is not special, any in 2000-2019 would work
 
 data <- initial_map %>% 
   st_drop_geometry() %>% 
-  mutate(disease = sample(500:700, size = n(), replace = TRUE))
+  filter(year %in% years_to_do_analysis) %>%
+  merge(., disease_df,by = c("name", "year"))
 
 d <- data
-
-HepatitisC <- read.csv("HepatitisC.csv")
 
 
 data <- data[order(
@@ -54,7 +67,7 @@ d1 <- data.frame(name = rep(unique(data$name), each = length(unique(data$year)))
 map <- reshape(d1, timevar = "year", idvar = "name", direction = "wide") %>%
   merge(map, ., by.x = "name", by.y = "name")
 
-map_sf <- map %>% gather(year, SIR, paste0("SIR.", 2000:2019)) %>%
+map_sf <- map %>% gather(year, SIR, paste0("SIR.", years_to_do_analysis)) %>%
   mutate(year = as.integer(substring(year, 5, 8)))
 
 
@@ -68,8 +81,15 @@ d1 <- d1 %>%
     idtime = 1 + year - min(year)
   )
 
-formula <- disease ~  WPM2.5 +  offset(log(E))+f(idarea, model = "bym", graph = g) +
-  f(idarea1, idtime, model = "iid") + idtime
+# formula <- disease ~ WPM2.5 + x1 + x2 + offset(log(E))+f(idarea, model = "bym", graph = g) +
+#   f(idarea1, idtime, model = "iid") + idtime
+
+covs <- paste(cov_names, collapse = " + ")
+
+formula <- as.formula(paste("disease ~ WPM2.5 + ", covs,
+                            " + offset(log(E)) + f(idarea, model = \"bym\", graph = g) +
+                             f(idarea1, idtime, model = \"iid\") + idtime"))
+
 
 res <- inla(formula,
             family = "poisson", data = d1, E = E,
@@ -96,7 +116,25 @@ m <- merge(
     names_sep = "_",             # Separator between the name components
     names_prefix = "Year_"       # Prefix to indicate the year for clarity
   )
+return(list(min_year = min_year,
+            max_year = max_year,
+            res = res,
+            m = m,
+            g = g,
+            clipped.raster.dpol.list = clipped.raster.dpol.list))
+}
 
+
+input <- read.csv(here("HepatitisC2.csv"), header = TRUE, sep = ",")
+
+output_data_analyzer <- data_analyzer(input)
+
+min_year <- output_data_analyzer$min_year
+max_year <- output_data_analyzer$max_year
+res <- output_data_analyzer$res
+m <- output_data_analyzer$m
+g <- output_data_analyzer$g
+clipped.raster.dpol.list <- output_data_analyzer$clipped.raster.dpol.list
 
 
 ui <- fluidPage(
@@ -180,18 +218,34 @@ server <- function(input, output, session) {
     }
   })
   
+  observeEvent(input$filedata, {
+    output$yearSlider <- renderUI({
+      sliderInput("year", "Select Year:", min = min_year, max = max_year, value = min_year, step = 1, sep = "")
+    })
+    output$resultsTitle <- renderUI({
+      tags$h4("Results")
+    })
+    output$mapOutput1 <- renderUI({
+      div(leafletOutput("mymap1", height = "238px", width = "100%"), class = "map-container")  # Adjusted size
+    })
+    output$mapOutput2 <- renderUI({
+      div(leafletOutput("mymap2", height = "238px", width = "100%"), class = "map-container")  # Adjusted size
+    })
+  })
+  
+  
   output$satelliteMap <- renderLeaflet({
     req(input$selectData)
-    
+    req(input$year)
+    year <- input$year
     if (input$selectData == "PM2.5") {
-      # Assuming clipped.raster.dpol is already created and available for PM2.5
-      range_values <- range(values(clipped.raster.dpol), na.rm = TRUE)
+      range_values <- range(values(clipped.raster.dpol.list[[as.character(year)]]), na.rm = TRUE)
       pal <- colorNumeric("viridis", range_values, na.color = "transparent")
       
       leaflet() %>%
         addTiles() %>%
-        addRasterImage(clipped.raster.dpol, colors = pal, opacity = 0.5) %>%
-        addLegend("bottomright",bins = c(0,15,30,45,60,75,90), pal = pal, values = values(clipped.raster.dpol), title = htmltools::HTML("PM<sub>2.5</sub>")) %>%
+        addRasterImage(clipped.raster.dpol.list[[as.character(year)]], colors = pal, opacity = 0.5) %>%
+        addLegend("bottomright",bins = c(0,15,30,45,60,75,90), pal = pal, values = values(clipped.raster.dpol.list[[as.character(year)]]), title = htmltools::HTML("PM<sub>2.5</sub>")) %>%
         addScaleBar(position = c("bottomleft"))
       
     } else if (input$selectData == "NO3") {
@@ -212,20 +266,6 @@ server <- function(input, output, session) {
     read.csv(input$filedata$datapath)
   })
   
-  observeEvent(input$filedata, {
-    output$yearSlider <- renderUI({
-      sliderInput("year", "Select Year:", min = 2000, max = 2019, value = 2000, step = 1, sep = "")
-    })
-    output$resultsTitle <- renderUI({
-      tags$h4("Results")
-    })
-    output$mapOutput1 <- renderUI({
-      div(leafletOutput("mymap1", height = "238px", width = "100%"), class = "map-container")  # Adjusted size
-    })
-    output$mapOutput2 <- renderUI({
-      div(leafletOutput("mymap2", height = "238px", width = "100%"), class = "map-container")  # Adjusted size
-    })
-  })
   
   output$mymap1 <- renderLeaflet({
     req(input$year)
