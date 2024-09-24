@@ -7,3 +7,4 @@ ohioshp/
 SApop/
 # Ignore R scripts not used
 Get_map_with_pop_pm2.5_2000_2019.R
+map.adj
