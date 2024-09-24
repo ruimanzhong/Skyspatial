@@ -369,8 +369,8 @@ server <- function(input, output, session) {
     rr_col <- paste0("RR_Year_", year)
     highest_risk_region <- m$name[which.max(m[[rr_col]])]
     highest_risk_value <- max(m[[rr_col]], na.rm = TRUE)
-    
-    paste("If the pullution increase one unit, then the risk increase 64%, highlighting the significant impact of air pollution on public health.
+    percentage_increase <- paste0(round((highest_risk_value - floor(highest_risk_value))*100, 2), "%,")
+    paste("If the pollution increases one unit, then the risk increases ", percentage_increase, "highlighting the significant impact of air pollution on public health.
           The highest relative risk (RR) in year", year, "is in", highest_risk_region, "with a value of", highest_risk_value)
   })
   output$inlaResults <- renderTable({
