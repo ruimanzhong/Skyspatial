@@ -23,10 +23,10 @@ library(htmlwidgets)
 library(pander)
 library(here)
 
-
-# rm(list = ls())
-# my_data_input <- read.csv(here("HepatitisC.csv"), header = TRUE, sep = ",")
-
+options(repos = c(
+  CRAN = "https://cloud.r-project.org/",
+  INLA = "https://inla.r-inla-download.org/R/stable"
+))
 
 data_analyzer_part1 <- function(my_data_input){
 
@@ -185,7 +185,7 @@ ui <- fluidPage(
       tags$div(class = "sidebar-content",
                tags$div(class = "select-input-container",
                         # tags$p("Please upload data to visualize its spatial distribution on the map."),
-                        selectInput("selectData", "Select satellite data:", choices = c("", "NO3", "PM2.5", "CO")),
+                        selectInput("selectData", "Select satellite data:", choices = c("", "PM2.5")), # choices = c("", "NO3", "PM2.5", "CO")
                         fileInput(inputId = "filedata", label = "Upload data. Choose csv file", accept = c(".csv")),
                         uiOutput("yearSlider"),
                         textInput("text", "Comments:", "")

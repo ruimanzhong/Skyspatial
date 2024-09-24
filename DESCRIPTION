@@ -1,0 +1,6 @@
+Package: YourShinyApp
+Title: Shiny App for Spatial Analysis
+Description: Shiny app using INLA for disease cluster detection.
+Depends: R (>= 4.3.2)
+Imports: readxl, sf, ggplot2, rgeoboundaries, rnaturalearth, SpatialEpi, spdep, INLA, sp, Matrix, spData, akima, terra, raster, leaflet, shiny, rmarkdown, htmltools, tidyr, dplyr, webshot, htmlwidgets, pander, here
+Repository: https://inla.r-inla-download.org/R/stable
